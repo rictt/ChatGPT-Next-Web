@@ -10,6 +10,7 @@ import {
 import { trimTopic } from "../utils";
 
 import Locale from "../locales";
+import { encodeCount } from "../encoder";
 
 export type Message = ChatCompletionResponseMessage & {
   date: string;
@@ -229,6 +230,25 @@ function countMessages(msgs: Message[]) {
   return msgs.reduce((pre, cur) => pre + cur.content.length, 0);
 }
 
+function countTokens(msgs: Message[]) {
+  const contents = msgs.map(e => e.content)
+  const tokens = contents.map(e => encodeCount(e))
+  const tokensCount = tokens.reduce((cur, prev) => cur + prev, 0)
+  return tokensCount
+}
+
+const max_tokens = 2000
+function handleMessages(msgs: Message[]) {
+  let msgList = [...msgs]
+  let counts = countTokens(msgList)
+  while (counts >= max_tokens) {
+    msgList = msgList.slice(1)
+    counts = countTokens(msgList)
+  }
+
+  return msgList
+}
+
 const LOCAL_KEY = "chat-next-web-store";
 
 export const useChatStore = create<ChatStore>()(
@@ -359,7 +379,9 @@ export const useChatStore = create<ChatStore>()(
 
         // get recent messages
         const recentMessages = get().getMessagesWithMemory();
-        const sendMessages = recentMessages.concat(userMessage);
+        const sendMessages = handleMessages(recentMessages.concat(userMessage));
+
+        console.log("sendMessages: ", sendMessages)
         const sessionIndex = get().currentSessionIndex;
         const messageIndex = get().currentSession().messages.length + 1;
 
